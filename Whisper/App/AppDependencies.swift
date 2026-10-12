@@ -1,4 +1,5 @@
 import Foundation
+import OSLog
 
 /// The set of services a session runs on. Real providers are used when keys are present;
 /// otherwise the mock companion and the on-device Apple voice take over.
@@ -18,7 +19,12 @@ struct AppDependencies {
         let voice: any VoiceSynthesisService
         if let key = configuration.elevenLabsKey, let voiceID = configuration.elevenLabsVoiceID {
             voice = FallbackVoiceService(
-                primary: ElevenLabsVoiceService(apiKey: key, voiceID: voiceID, audio: audio),
+                primary: ElevenLabsVoiceService(
+                    apiKey: key,
+                    voiceID: voiceID,
+                    modelID: configuration.elevenLabsModelID,
+                    audio: audio
+                ),
                 fallback: appleVoice
             )
         } else {
@@ -31,6 +37,13 @@ struct AppDependencies {
         } else {
             ai = MockAIConversationService()
         }
+
+        let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "Whisper", category: "Setup")
+        let voiceName = configuration.elevenLabsKey != nil && configuration.elevenLabsVoiceID != nil
+            ? "ElevenLabs (\(configuration.elevenLabsModelID ?? ElevenLabsVoiceService.defaultModelID)) with Apple fallback"
+            : "Apple (no ElevenLabs key or voice ID)"
+        let aiName = configuration.openAIKey != nil ? "OpenAI (\(configuration.openAIModel))" : "Mock (no OpenAI key)"
+        logger.info("Voice: \(voiceName, privacy: .public) · Companion: \(aiName, privacy: .public)")
 
         return AppDependencies(
             audio: audio,

@@ -14,13 +14,16 @@ struct APIConfiguration: Sendable {
     let openAIModel: String
     let elevenLabsKey: String?
     let elevenLabsVoiceID: String?
+    /// Optional; defaults to `ElevenLabsVoiceService.defaultModelID`.
+    let elevenLabsModelID: String?
 
     static func load(from bundle: Bundle = .main) -> APIConfiguration {
         APIConfiguration(
             openAIKey: value(for: "OPENAI_API_KEY", in: bundle),
             openAIModel: value(for: "OPENAI_MODEL", in: bundle) ?? defaultOpenAIModel,
             elevenLabsKey: value(for: "ELEVENLABS_API_KEY", in: bundle),
-            elevenLabsVoiceID: value(for: "ELEVENLABS_VOICE_ID", in: bundle)
+            elevenLabsVoiceID: value(for: "ELEVENLABS_VOICE_ID", in: bundle),
+            elevenLabsModelID: value(for: "ELEVENLABS_MODEL_ID", in: bundle)
         )
     }
 

@@ -37,36 +37,65 @@ Arguments*. To change the default for everyone, edit
 unreliable in the simulator. Background audio and phone-call interruptions are
 best tested on a device.
 
-## Add API keys (optional)
+## Set up ElevenLabs (the companion's voice)
 
-```sh
-cp Config/Secrets.example.xcconfig Config/Secrets.xcconfig
-```
+ElevenLabs is Whisper's voice provider. Without a key the app still works and
+uses the on-device Apple voice, but it's meant to run on ElevenLabs.
 
-Then fill in `Config/Secrets.xcconfig`. It's git-ignored.
+1. In ElevenLabs, open the **Voice Library**, find a soft voice (search for
+   "ASMR", "whisper" or "soft"), add it to **My Voices** and copy its **Voice ID**.
+2. Create an API key (*Developers → API Keys*). It needs text-to-speech access.
+3. Create your local secrets file:
 
-```
-OPENAI_API_KEY = sk-...
-OPENAI_MODEL =                # optional, defaults to gpt-4o-mini
-ELEVENLABS_API_KEY = ...
-ELEVENLABS_VOICE_ID = ...     # pick a soft / ASMR voice from the ElevenLabs voice library
-```
+   ```sh
+   cp Config/Secrets.example.xcconfig Config/Secrets.xcconfig
+   ```
 
-Clean the build folder (⇧⌘K) and run again. The keys flow
-`Secrets.xcconfig → Info.plist → APIConfiguration`.
+4. Fill in `Config/Secrets.xcconfig` (git-ignored):
 
-| Keys present            | Companion text            | Voice                                    |
-|-------------------------|---------------------------|------------------------------------------|
-| none                    | Mock responses            | Apple `AVSpeechSynthesizer`              |
-| `OPENAI_API_KEY`        | OpenAI Chat Completions   | Apple                                    |
-| + ElevenLabs key & voice| OpenAI (or mock)          | ElevenLabs, with Apple fallback per line |
+   ```
+   ELEVENLABS_API_KEY = ...
+   ELEVENLABS_VOICE_ID = ...
+   ELEVENLABS_MODEL_ID =        # optional, defaults to eleven_multilingual_v2
+   OPENAI_API_KEY = sk-...      # optional, for real conversation instead of mock lines
+   OPENAI_MODEL =               # optional, defaults to gpt-4o-mini
+   ```
 
-If a call fails or you're offline, a soft message appears ("Voice isn't
-available right now. Your soundscape can keep playing.") and the ambience keeps
-playing.
+5. Clean the build folder (⇧⌘K) and run. The Xcode console logs which providers
+   are active, e.g. `Voice: ElevenLabs (eleven_multilingual_v2) with Apple fallback`.
+
+The keys flow `Secrets.xcconfig → Info.plist → APIConfiguration`.
+
+How the ElevenLabs voice is used:
+
+- Audio is requested as MP3 (`mp3_44100_128`), decoded, and played through the
+  app's voice chain, so it ducks the ambience, gets the warmth EQ and limiter, and
+  fades like everything else.
+- Voice settings are tuned for calm delivery: stability 0.7, no style
+  exaggeration, no speaker boost. Speed is about 0.88 and slows further during
+  relaxation, never going below the API minimum of 0.7.
+- With `ELEVENLABS_MODEL_ID = eleven_v3`, each line gets a `[whispers]` audio tag,
+  and only stability and similarity are sent.
+- Latency: the opening line downloads while the soundscape fades in, and the
+  goodnight line downloads during relaxation. Up to 24 lines stay cached in memory,
+  so repeated lines play instantly and don't cost credits again.
+- Reliability: if a line fails, it's spoken by the Apple voice instead. After 3
+  failures in a row, such as a wrong key or no credits left, the session stays on
+  the Apple voice.
+
+| Keys present                 | Companion text          | Voice                                    |
+|------------------------------|-------------------------|------------------------------------------|
+| none                         | Mock responses          | Apple `AVSpeechSynthesizer`              |
+| ElevenLabs key + voice ID    | Mock responses          | ElevenLabs, with Apple fallback per line |
+| + `OPENAI_API_KEY`           | OpenAI Chat Completions | ElevenLabs, with Apple fallback per line |
+
+If the conversation call fails or you're offline, a soft message appears
+("Voice isn't available right now. Your soundscape can keep playing.") and the
+ambience keeps playing.
 
 > **Production:** never ship API keys inside the app binary. Put these calls behind
-> a backend you control. Embedding keys is acceptable only for this MVP.
+> a backend you control (for ElevenLabs, a small proxy that adds the `xi-api-key`
+> header). Embedding keys is acceptable only for this MVP.
 
 ## Add ambience sound files (optional)
 
@@ -109,7 +138,7 @@ Whisper/
 ├── Services/
 │   ├── AI/           AIConversationService protocol, Mock + OpenAI, CompanionPrompt
 │   ├── Speech/       SpeechRecognitionService protocol, AppleSpeechRecognitionService
-│   ├── Voice/        VoiceSynthesisService protocol, Apple + ElevenLabs + Fallback
+│   ├── Voice/        VoiceSynthesisService protocol, ElevenLabs (primary) + Apple + Fallback
 │   ├── Audio/        AudioEngineService (AVAudioEngine), ambience loader, procedural loops
 │   ├── Safety/       SafetyService (crisis keyword screen)
 │   └── Permissions/  PermissionsService

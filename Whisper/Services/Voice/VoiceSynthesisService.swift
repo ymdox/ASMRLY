@@ -16,6 +16,12 @@ protocol VoiceSynthesisService: AnyObject {
     func speak(_ text: String, style: VoiceStyle) async throws
     /// Fades out and stops any current speech.
     func stop(fade: TimeInterval) async
+    /// Optionally prepares a line ahead of time (e.g. downloads it) so it can play instantly.
+    func prefetch(_ text: String, style: VoiceStyle) async
+}
+
+extension VoiceSynthesisService {
+    func prefetch(_ text: String, style: VoiceStyle) async {}
 }
 
 /// Voice stand-in that only waits as long as the line would take to say. Used for previews.

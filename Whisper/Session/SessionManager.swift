@@ -9,6 +9,7 @@ final class SessionManager: Identifiable {
     static let voiceUnavailableMessage = "Voice isn't available right now. Your soundscape can keep playing."
     static let listeningUnavailableMessage = "Listening isn't available right now. Your soundscape can keep playing."
     private static let maxHistory = 10
+    private static let closingStyle = VoiceStyle(volume: 0.45, pace: 0.85)
 
     let id = UUID()
     let companion: Companion
@@ -140,6 +141,11 @@ final class SessionManager: Identifiable {
         }
         audio.setAmbienceLevel(ambienceVolume)
 
+        // Download the opening line while the soundscape starts, so Luna speaks without a wait.
+        let opening = mode == .talk ? companion.openingLine : companion.listeningOpeningLine
+        let voice = self.voice
+        Task { await voice.prefetch(opening, style: .conversation) }
+
         do {
             try await audio.prepare(ambience: ambience)
         } catch {
@@ -160,7 +166,6 @@ final class SessionManager: Identifiable {
         phase = .conversation
         startClock()
 
-        let opening = mode == .talk ? companion.openingLine : companion.listeningOpeningLine
         turnTask = Task { [weak self] in
             await self?.speak(opening, style: .conversation)
         }
@@ -338,6 +343,9 @@ final class SessionManager: Identifiable {
         switch newPhase {
         case .relaxation:
             updateMonologue()
+            let closing = companion.closingLine
+            let voice = self.voice
+            Task { await voice.prefetch(closing, style: Self.closingStyle) }
         case .ambientOnly:
             monologueTask?.cancel()
             monologueTask = nil
@@ -348,7 +356,7 @@ final class SessionManager: Identifiable {
             turnTask = Task { [weak self] in
                 await voice.stop(fade: SessionConfiguration.voiceFade)
                 guard !Task.isCancelled else { return }
-                await self?.speak(closing, style: VoiceStyle(volume: 0.45, pace: 0.85))
+                await self?.speak(closing, style: Self.closingStyle)
             }
         case .completed:
             Task { await self.complete() }
