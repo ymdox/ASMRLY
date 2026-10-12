@@ -1,5 +1,11 @@
 import AVFoundation
 
+/// Carries a value the compiler can't prove Sendable (e.g. an audio buffer that is handed
+/// off once and never touched by the producing task again) across a task boundary.
+struct UncheckedSendable<Value>: @unchecked Sendable {
+    let value: Value
+}
+
 enum AudioBufferTools {
     /// Converts a buffer (sample rate and/or sample format) into `format`.
     static func convert(_ buffer: AVAudioPCMBuffer, to format: AVAudioFormat) -> AVAudioPCMBuffer? {

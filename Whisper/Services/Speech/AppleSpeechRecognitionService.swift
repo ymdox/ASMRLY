@@ -74,7 +74,8 @@ final class AppleSpeechRecognitionService: SpeechRecognitionService {
     }
 
     func stopListening() async -> String {
-        guard let request else { return latestTranscript }
+        guard let request else { return "" }
+        let token = generation
         stopAudioInput()
         request.endAudio()
 
@@ -90,6 +91,8 @@ final class AppleSpeechRecognitionService: SpeechRecognitionService {
             timeout.cancel()
         }
 
+        // A new recognition may have started while we waited; leave it alone.
+        guard token == generation else { return "" }
         let transcript = latestTranscript
         reset()
         return transcript

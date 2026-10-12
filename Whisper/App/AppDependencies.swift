@@ -8,6 +8,8 @@ struct AppDependencies {
     let ai: any AIConversationService
     let speech: any SpeechRecognitionService
     let voice: any VoiceSynthesisService
+    let permissions: PermissionsService
+    let safety: SafetyService
 
     static func live(configuration: APIConfiguration = .load()) -> AppDependencies {
         let audio = AudioEngineService()
@@ -34,7 +36,21 @@ struct AppDependencies {
             audio: audio,
             ai: ai,
             speech: AppleSpeechRecognitionService(),
-            voice: voice
+            voice: voice,
+            permissions: PermissionsService(),
+            safety: SafetyService()
+        )
+    }
+
+    /// Offline, silent dependencies for SwiftUI previews.
+    static func preview() -> AppDependencies {
+        AppDependencies(
+            audio: AudioEngineService(),
+            ai: MockAIConversationService(),
+            speech: UnavailableSpeechRecognitionService(),
+            voice: SilentVoiceService(),
+            permissions: PermissionsService(),
+            safety: SafetyService()
         )
     }
 }

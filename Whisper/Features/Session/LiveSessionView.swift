@@ -46,7 +46,10 @@ struct LiveSessionView: View {
             .disabled(session.isEnding)
             .opacity(session.isEnding ? 0.5 : 1)
 
-            if session.phase == .completed, !session.isEnding {
+            if session.safetyTriggered {
+                SafetySupportView(onClose: onClose)
+                    .transition(.opacity)
+            } else if session.phase == .completed, !session.isEnding {
                 SessionEndView(
                     title: "Sleep well",
                     message: "Your session has gently come to an end.",
@@ -63,6 +66,7 @@ struct LiveSessionView: View {
             }
         }
         .animation(.easeInOut(duration: 0.8), value: session.phase)
+        .animation(.easeInOut(duration: 0.8), value: session.safetyTriggered)
         .animation(.easeInOut(duration: 0.6), value: session.activity)
         .animation(.easeInOut(duration: 0.6), value: session.notice)
         .persistentSystemOverlays(.hidden)
@@ -90,12 +94,7 @@ struct LiveSessionView: View {
             configuration: .standard,
             mode: .justListen,
             canTalk: false,
-            dependencies: AppDependencies(
-                audio: AudioEngineService(),
-                ai: MockAIConversationService(),
-                speech: UnavailableSpeechRecognitionService(),
-                voice: SilentVoiceService()
-            )
+            dependencies: .preview()
         ),
         onClose: {}
     )

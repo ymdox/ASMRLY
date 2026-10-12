@@ -10,12 +10,13 @@ enum AmbienceLoader {
 
     static func loadBuffer(for ambience: Ambience) async -> AVAudioPCMBuffer? {
         guard let name = ambience.soundFileName else { return nil }
-        return await Task.detached(priority: .userInitiated) { () -> AVAudioPCMBuffer? in
+        let loaded = await Task.detached(priority: .userInitiated) { () -> UncheckedSendable<AVAudioPCMBuffer?> in
             if let url = AmbienceLoader.bundledURL(named: name), let buffer = AmbienceLoader.readBuffer(from: url) {
-                return buffer
+                return UncheckedSendable(value: buffer)
             }
-            return ProceduralAmbience.makeBuffer(for: ambience)
+            return UncheckedSendable(value: ProceduralAmbience.makeBuffer(for: ambience))
         }.value
+        return loaded.value
     }
 
     static func bundledURL(named name: String) -> URL? {

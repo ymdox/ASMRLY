@@ -26,11 +26,11 @@ final class ElevenLabsVoiceService: VoiceSynthesisService {
     func speak(_ text: String, style: VoiceStyle) async throws {
         let data = try await synthesize(text, style: style)
         try Task.checkCancellation()
-        let buffer = try await Task.detached(priority: .userInitiated) {
-            try ElevenLabsVoiceService.decode(data)
+        let decoded = try await Task.detached(priority: .userInitiated) {
+            UncheckedSendable(value: try ElevenLabsVoiceService.decode(data))
         }.value
         try Task.checkCancellation()
-        await audio.playVoice(buffer, volume: style.volume)
+        await audio.playVoice(decoded.value, volume: style.volume)
     }
 
     func stop(fade: TimeInterval) async {

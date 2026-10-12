@@ -26,11 +26,14 @@ final class SessionManager: Identifiable {
     private(set) var mode: InteractionMode
     private(set) var ambienceVolume: Float = 0.5
     private(set) var isEnding = false
+    /// Crisis language was detected: the immersive flow stops and support info is shown.
+    private(set) var safetyTriggered = false
 
     @ObservationIgnored private let audio: AudioEngineService
     @ObservationIgnored private let ai: any AIConversationService
     @ObservationIgnored private let speech: any SpeechRecognitionService
     @ObservationIgnored private let voice: any VoiceSynthesisService
+    @ObservationIgnored private let safety: SafetyService
 
     @ObservationIgnored private var history: [ChatMessage] = []
     @ObservationIgnored private var clockTask: Task<Void, Never>?
@@ -62,6 +65,7 @@ final class SessionManager: Identifiable {
         self.ai = dependencies.ai
         self.speech = dependencies.speech
         self.voice = dependencies.voice
+        self.safety = dependencies.safety
     }
 
     // MARK: - Derived state
@@ -156,7 +160,7 @@ final class SessionManager: Identifiable {
         phase = .conversation
         startClock()
 
-        let opening = companion.openingLine
+        let opening = mode == .talk ? companion.openingLine : companion.listeningOpeningLine
         turnTask = Task { [weak self] in
             await self?.speak(opening, style: .conversation)
         }
@@ -269,9 +273,31 @@ final class SessionManager: Identifiable {
                 self.activity = .idle
                 return
             }
+            guard self.safety.assess(text) == .ok else {
+                self.triggerSafetyStop()
+                return
+            }
             self.appendTranscript(.user, text)
             await self.runTurn(userText: text)
         }
+    }
+
+    // MARK: - Safety
+
+    /// Stops the roleplay entirely (no further whispers) and fades the soundscape out.
+    private func triggerSafetyStop() {
+        safetyTriggered = true
+        isEnding = true
+        stopAllTasks()
+        transcript.removeAll()
+        liveUserText = nil
+        noticeTask?.cancel()
+        notice = nil
+
+        let voice = self.voice
+        let audio = self.audio
+        Task { await voice.stop(fade: SessionConfiguration.voiceFade) }
+        Task { await audio.fadeOutAndStop(duration: SessionConfiguration.endFade) }
     }
 
     // MARK: - Timeline
@@ -442,9 +468,13 @@ final class SessionManager: Identifiable {
             pause()
             pausedByInterruption = true
         case .interruptionEnded(let shouldResume):
-            guard pausedByInterruption, phase == .paused else { return }
-            pausedByInterruption = false
-            if shouldResume { resume() }
+            if pausedByInterruption, phase == .paused {
+                pausedByInterruption = false
+                if shouldResume { resume() }
+            } else if phase.isRunning || phase == .preparing {
+                // Interrupted outside a pausable moment: just fade the soundscape back in.
+                audio.resume(fade: SessionConfiguration.pauseFade)
+            }
         }
     }
 
