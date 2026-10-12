@@ -21,5 +21,11 @@ struct RootView: View {
                 coordinator.closeSession()
             }
         }
+        #if DEBUG
+        .task {
+            try? await Task.sleep(for: .seconds(1))
+            coordinator.autoStartIfRequested()
+        }
+        #endif
     }
 }

@@ -56,6 +56,17 @@ final class AppCoordinator {
         activeSession = nil
     }
 
+    #if DEBUG
+    /// Test hook for automated simulator runs: launch with `-WhisperAutoStartAmbience rain`
+    /// to skip Home and the primer and go straight into a session. Not compiled into Release.
+    func autoStartIfRequested() {
+        guard activeSession == nil,
+              let raw = UserDefaults.standard.string(forKey: "WhisperAutoStartAmbience"),
+              let ambience = Ambience(rawValue: raw) else { return }
+        launch(ambience: ambience)
+    }
+    #endif
+
     private func launch(ambience: Ambience) {
         guard activeSession == nil else { return }
         let canTalk = dependencies.speech.isAvailable
