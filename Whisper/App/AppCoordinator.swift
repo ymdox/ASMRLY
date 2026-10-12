@@ -8,13 +8,26 @@ final class AppCoordinator {
     let companion = Companion.luna
     var activeSession: SessionManager?
     var isShowingPermissionPrimer = false
+    /// Live provider checks shown on Home in debug builds.
+    private(set) var providerChecks: [ProviderCheck] = []
+    private(set) var isCheckingProviders = false
 
+    @ObservationIgnored private let configuration: APIConfiguration
     @ObservationIgnored private let dependencies: AppDependencies
     @ObservationIgnored private var pendingAmbience: Ambience?
     @ObservationIgnored private var wantsMicrophone = false
 
     init(dependencies: AppDependencies? = nil) {
-        self.dependencies = dependencies ?? .live()
+        let configuration = APIConfiguration.load()
+        self.configuration = configuration
+        self.dependencies = dependencies ?? .live(configuration: configuration)
+    }
+
+    func checkProviders() async {
+        guard !isCheckingProviders else { return }
+        isCheckingProviders = true
+        providerChecks = await ConnectionDiagnostics.run(configuration: configuration)
+        isCheckingProviders = false
     }
 
     func start(ambience: Ambience) {

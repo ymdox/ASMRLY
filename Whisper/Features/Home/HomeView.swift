@@ -3,6 +3,8 @@ import SwiftUI
 struct HomeView: View {
     let companion: Companion
     let onStart: (Ambience) -> Void
+    /// Optional extra content under the picker (the debug connection check).
+    var diagnostics: AnyView? = nil
 
     @AppStorage("selectedAmbience") private var ambience: Ambience = .rain
 
@@ -15,6 +17,9 @@ struct HomeView: View {
                     header
                     CompanionCard(companion: companion)
                     AmbiencePicker(selection: $ambience)
+                    if let diagnostics {
+                        diagnostics
+                    }
                 }
                 .padding(.horizontal, Theme.Layout.screenPadding)
                 .padding(.top, Theme.Spacing.xxl)

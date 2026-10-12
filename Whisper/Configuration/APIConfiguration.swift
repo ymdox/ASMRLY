@@ -29,7 +29,8 @@ struct APIConfiguration: Sendable {
 
     private static func value(for key: String, in bundle: Bundle) -> String? {
         guard let raw = bundle.object(forInfoDictionaryKey: key) as? String else { return nil }
-        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        // Tolerate stray quotes or spaces pasted around a value in Secrets.xcconfig.
+        let trimmed = raw.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines.union(CharacterSet(charactersIn: "\"'“”")))
         // Unset build settings arrive empty (or unexpanded); treat obvious placeholders as missing too.
         guard !trimmed.isEmpty,
               !trimmed.hasPrefix("$("),

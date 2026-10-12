@@ -14,7 +14,7 @@ enum VoiceServiceError: Error {
 /// prefetched so they play without a network wait.
 @MainActor
 final class ElevenLabsVoiceService: VoiceSynthesisService {
-    static let defaultModelID = "eleven_multilingual_v2"
+    nonisolated static let defaultModelID = "eleven_multilingual_v2"
 
     private let apiKey: String
     private let voiceID: String
