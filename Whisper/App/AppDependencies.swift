@@ -9,11 +9,12 @@ struct AppDependencies {
     let voice: any VoiceSynthesisService
 
     static func live() -> AppDependencies {
-        AppDependencies(
-            audio: AudioEngineService(),
+        let audio = AudioEngineService()
+        return AppDependencies(
+            audio: audio,
             ai: MockAIConversationService(),
-            speech: UnavailableSpeechRecognitionService(),
-            voice: SilentVoiceService()
+            speech: AppleSpeechRecognitionService(),
+            voice: AppleVoiceSynthesisService(audio: audio)
         )
     }
 }
