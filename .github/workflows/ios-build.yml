@@ -35,4 +35,5 @@ jobs:
 
       - name: Show compiler errors
         if: failure()
-        run: grep -E "error:|warning: .*(will be an error|unavailable)" build.log | sort -u | head -100 || true
+        run: |
+          grep -E "error:|warning: .*(will be an error|unavailable)" build.log | sort -u | head -100 || true
