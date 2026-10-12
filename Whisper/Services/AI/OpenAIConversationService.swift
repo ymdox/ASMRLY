@@ -1,10 +1,18 @@
 import Foundation
 import OSLog
 
-enum AIServiceError: Error {
+enum AIServiceError: Error, CustomStringConvertible {
     case invalidRequest
-    case badResponse(statusCode: Int)
+    case badResponse(statusCode: Int, message: String)
     case emptyResponse
+
+    var description: String {
+        switch self {
+        case .invalidRequest: "Invalid request"
+        case .badResponse(let status, let message): "HTTP \(status): \(message)"
+        case .emptyResponse: "Empty reply"
+        }
+    }
 }
 
 /// Chat Completions-backed companion.
@@ -47,12 +55,12 @@ struct OpenAIConversationService: AIConversationService {
             throw error
         }
         let (data, response) = result
-        guard let http = response as? HTTPURLResponse else { throw AIServiceError.badResponse(statusCode: -1) }
+        guard let http = response as? HTTPURLResponse else { throw AIServiceError.badResponse(statusCode: -1, message: "No HTTP response") }
         guard (200..<300).contains(http.statusCode) else {
             // OpenAI explains failures (invalid key, no credits / insufficient_quota, unknown model) in the body.
             let detail = String(decoding: data.prefix(500), as: UTF8.self)
             Self.logger.error("HTTP \(http.statusCode, privacy: .public) for model \(model, privacy: .public): \(detail, privacy: .public)")
-            throw AIServiceError.badResponse(statusCode: http.statusCode)
+            throw AIServiceError.badResponse(statusCode: http.statusCode, message: ConnectionDiagnostics.errorMessage(from: data))
         }
 
         let decoded = try JSONDecoder().decode(ChatCompletionResponse.self, from: data)

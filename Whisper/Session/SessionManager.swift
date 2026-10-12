@@ -51,6 +51,7 @@ final class SessionManager: Identifiable {
     @ObservationIgnored private var consecutiveFailures = 0
     /// When Luna last finished speaking or the user last used the microphone.
     @ObservationIgnored private var lastInteractionAt = Date.now
+    @ObservationIgnored private var fallbackObserver: NSObjectProtocol?
 
     init(
         companion: Companion,
@@ -158,6 +159,17 @@ final class SessionManager: Identifiable {
         audio.onEvent = { [weak self] event in
             self?.handleAudioEvent(event)
         }
+        #if DEBUG
+        // Test builds: say on screen why OpenAI wasn't used, so it can be fixed.
+        fallbackObserver = NotificationCenter.default.addObserver(
+            forName: .companionFellBack, object: nil, queue: .main
+        ) { [weak self] notification in
+            let reason = notification.userInfo?["reason"] as? String ?? "unknown error"
+            MainActor.assumeIsolated {
+                self?.showNotice("Debug: OpenAI failed (\(reason)). Luna used a pre-written line.")
+            }
+        }
+        #endif
         audio.setAmbienceLevel(ambienceVolume)
 
         // Download the opening line while the soundscape starts, so Luna speaks without a wait.
@@ -394,6 +406,10 @@ final class SessionManager: Identifiable {
     }
 
     private func stopAllTasks() {
+        if let fallbackObserver {
+            NotificationCenter.default.removeObserver(fallbackObserver)
+            self.fallbackObserver = nil
+        }
         clockTask?.cancel()
         clockTask = nil
         monologueTask?.cancel()
