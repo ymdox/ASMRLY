@@ -32,9 +32,14 @@ struct APIConfiguration: Sendable {
         // Tolerate stray quotes or spaces pasted around a value in Secrets.xcconfig.
         let trimmed = raw.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines.union(CharacterSet(charactersIn: "\"'“”")))
         // Unset build settings arrive empty (or unexpanded); treat obvious placeholders as missing too.
-        guard !trimmed.isEmpty,
-              !trimmed.hasPrefix("$("),
-              !trimmed.lowercased().hasPrefix("your") else { return nil }
-        return trimmed
+        // "Bearer " belongs in the HTTP header, which the app adds itself; drop it if pasted here.
+        var value = trimmed
+        if value.lowercased().hasPrefix("bearer ") {
+            value = String(value.dropFirst("bearer ".count)).trimmingCharacters(in: .whitespaces)
+        }
+        guard !value.isEmpty,
+              !value.hasPrefix("$("),
+              !value.lowercased().hasPrefix("your") else { return nil }
+        return value
     }
 }
