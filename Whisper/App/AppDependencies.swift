@@ -33,7 +33,10 @@ struct AppDependencies {
 
         let ai: any AIConversationService
         if let key = configuration.openAIKey {
-            ai = OpenAIConversationService(apiKey: key, model: configuration.openAIModel)
+            ai = FallbackAIConversationService(
+                primary: OpenAIConversationService(apiKey: key, model: configuration.openAIModel),
+                fallback: MockAIConversationService(delay: 0...0.2)
+            )
         } else {
             ai = MockAIConversationService()
         }
