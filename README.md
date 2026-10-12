@@ -56,7 +56,7 @@ uses the on-device Apple voice, but it's meant to run on ElevenLabs.
    ```
    ELEVENLABS_API_KEY = ...
    ELEVENLABS_VOICE_ID = ...
-   ELEVENLABS_MODEL_ID =        # optional, defaults to eleven_multilingual_v2
+   ELEVENLABS_MODEL_ID =        # optional: eleven_v4 recommended (default eleven_multilingual_v2)
    OPENAI_API_KEY = sk-...      # optional, for real conversation instead of mock lines
    OPENAI_MODEL =               # optional, defaults to gpt-4o-mini
    ```
@@ -74,8 +74,9 @@ How the ElevenLabs voice is used:
 - Voice settings are tuned for calm delivery: stability 0.7, no style
   exaggeration, no speaker boost. Speed is about 0.88 and slows further during
   relaxation, never going below the API minimum of 0.7.
-- With `ELEVENLABS_MODEL_ID = eleven_v3`, each line gets a `[whispers]` audio tag,
-  and only stability and similarity are sent.
+- With `eleven_v4`, `eleven_v4_turbo` or `eleven_v3`, each line gets a `[whispers]` audio tag
+  and only stability and similarity are sent, since these models don't take speed or style.
+  `eleven_v4` gives the best whisper; `eleven_v4_turbo` responds faster.
 - Latency: the opening line downloads while the soundscape fades in, and the
   goodnight line downloads during relaxation. Up to 24 lines stay cached in memory,
   so repeated lines play instantly and don't cost credits again.

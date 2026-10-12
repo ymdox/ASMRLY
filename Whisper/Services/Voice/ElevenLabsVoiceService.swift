@@ -26,8 +26,9 @@ final class ElevenLabsVoiceService: VoiceSynthesisService {
     private var inFlight: [String: Task<UncheckedSendable<AVAudioPCMBuffer>, Error>] = [:]
     private static let cacheLimit = 24
 
-    /// Eleven v3 understands audio tags such as `[whispers]` but takes fewer voice settings.
-    private var isV3: Bool { modelID.hasPrefix("eleven_v3") }
+    /// Eleven v3 / v4 (incl. eleven_v4_turbo) are steered by audio tags such as `[whispers]`
+    /// and only accept stability and similarity (no speed or style).
+    private var usesAudioTags: Bool { modelID.hasPrefix("eleven_v3") || modelID.hasPrefix("eleven_v4") }
 
     init(apiKey: String, voiceID: String, modelID: String?, audio: AudioEngineService, session: URLSession = .shared) {
         self.apiKey = apiKey
@@ -103,7 +104,7 @@ final class ElevenLabsVoiceService: VoiceSynthesisService {
         else { throw VoiceServiceError.invalidRequest }
 
         let settings: SpeechRequest.VoiceSettings
-        if isV3 {
+        if usesAudioTags {
             settings = .init(stability: 0.5, similarityBoost: 0.75, style: nil, useSpeakerBoost: nil, speed: nil)
         } else {
             settings = .init(
@@ -115,7 +116,7 @@ final class ElevenLabsVoiceService: VoiceSynthesisService {
             )
         }
         let body = SpeechRequest(
-            text: isV3 ? "[whispers] \(text)" : text,
+            text: usesAudioTags ? "[whispers] \(text)" : text,
             modelId: modelID,
             voiceSettings: settings
         )
