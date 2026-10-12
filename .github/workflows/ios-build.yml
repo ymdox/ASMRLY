@@ -1,0 +1,38 @@
+name: iOS build
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ios-build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build for iOS Simulator
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Show Xcode version
+        run: xcodebuild -version
+
+      # No Secrets.xcconfig in CI: the app builds in its zero-key mode (mock companion + Apple voice).
+      - name: Build
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -project Whisper.xcodeproj \
+            -scheme Whisper \
+            -configuration Debug \
+            -destination 'generic/platform=iOS Simulator' \
+            CODE_SIGNING_ALLOWED=NO \
+            build 2>&1 | tee build.log
+
+      - name: Show compiler errors
+        if: failure()
+        run: grep -E "error:|warning: .*(will be an error|unavailable)" build.log | sort -u | head -100 || true
