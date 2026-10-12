@@ -1,4 +1,5 @@
 import Foundation
+import OSLog
 
 /// Tries the primary voice (ElevenLabs) and falls back to a secondary one (Apple) for that line
 /// if it fails, so a network hiccup never leaves the companion silent.
@@ -11,6 +12,7 @@ final class FallbackVoiceService: VoiceSynthesisService {
     private var consecutivePrimaryFailures = 0
 
     private static let maxPrimaryFailures = 3
+    nonisolated private static let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "Whisper", category: "Voice")
 
     init(primary: any VoiceSynthesisService, fallback: any VoiceSynthesisService) {
         self.primary = primary
@@ -30,6 +32,10 @@ final class FallbackVoiceService: VoiceSynthesisService {
             } catch {
                 try Task.checkCancellation()
                 consecutivePrimaryFailures += 1
+                Self.logger.error("Primary voice failed (\(String(describing: error), privacy: .public)); using fallback voice for this line.")
+                if !isPrimaryHealthy {
+                    Self.logger.error("Primary voice failed \(Self.maxPrimaryFailures, privacy: .public) times in a row; staying on the fallback voice for this session.")
+                }
             }
         }
         try await fallback.speak(text, style: style)

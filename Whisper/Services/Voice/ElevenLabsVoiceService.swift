@@ -1,4 +1,5 @@
 import AVFoundation
+import OSLog
 
 enum VoiceServiceError: Error {
     case invalidRequest
@@ -25,6 +26,7 @@ final class ElevenLabsVoiceService: VoiceSynthesisService {
     private var cacheOrder: [String] = []
     private var inFlight: [String: Task<UncheckedSendable<AVAudioPCMBuffer>, Error>] = [:]
     private static let cacheLimit = 24
+    nonisolated private static let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "Whisper", category: "ElevenLabs")
 
     /// Eleven v3 / v4 (incl. eleven_v4_turbo) are steered by audio tags such as `[whispers]`
     /// and only accept stability and similarity (no speed or style).
@@ -130,11 +132,22 @@ final class ElevenLabsVoiceService: VoiceSynthesisService {
         encoder.keyEncodingStrategy = .convertToSnakeCase
         request.httpBody = try encoder.encode(body)
 
-        let (data, response) = try await session.data(for: request)
+        let result: (Data, URLResponse)
+        do {
+            result = try await session.data(for: request)
+        } catch {
+            Self.logger.error("Request failed: \(error.localizedDescription, privacy: .public)")
+            throw error
+        }
+        let (data, response) = result
         guard let http = response as? HTTPURLResponse else { throw VoiceServiceError.badResponse(statusCode: -1) }
         guard (200..<300).contains(http.statusCode), !data.isEmpty else {
+            // ElevenLabs explains failures (bad key, missing permission, quota, invalid setting) in the body.
+            let detail = String(decoding: data.prefix(500), as: UTF8.self)
+            Self.logger.error("HTTP \(http.statusCode, privacy: .public) for model \(self.modelID, privacy: .public): \(detail, privacy: .public)")
             throw VoiceServiceError.badResponse(statusCode: http.statusCode)
         }
+        Self.logger.info("Synthesized \(data.count, privacy: .public) bytes with \(self.modelID, privacy: .public)")
         return data
     }
 
@@ -145,7 +158,13 @@ final class ElevenLabsVoiceService: VoiceSynthesisService {
         try data.write(to: url, options: .atomic)
         defer { try? FileManager.default.removeItem(at: url) }
 
-        let file = try AVAudioFile(forReading: url)
+        let file: AVAudioFile
+        do {
+            file = try AVAudioFile(forReading: url)
+        } catch {
+            Self.logger.error("Could not decode ElevenLabs audio: \(error.localizedDescription, privacy: .public)")
+            throw error
+        }
         guard file.length > 0,
               let buffer = AVAudioPCMBuffer(pcmFormat: file.processingFormat, frameCapacity: AVAudioFrameCount(file.length))
         else { throw VoiceServiceError.decodingFailed }
