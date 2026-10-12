@@ -11,7 +11,7 @@ struct MockAIConversationService: AIConversationService {
         switch (context.stage, userText) {
         case (.relaxation, _): pool = Self.relaxation
         case (.conversation, .some): pool = Self.responses
-        case (.conversation, .none): pool = Self.monologue
+        case (.conversation, .none): pool = context.invitesReply ? Self.monologue + Self.invitations : Self.monologue
         }
 
         let recent = Set(history.suffix(8).filter { $0.role == .assistant }.map(\.content))
@@ -39,6 +39,12 @@ struct MockAIConversationService: AIConversationService {
         "Every breath out takes a little more of the day away.",
         "You don't have to hold on to anything right now.",
         "Let your thoughts float by… like clouds on a quiet night.",
+    ]
+
+    static let invitations = [
+        "If something's on your mind, you can tell me… or we can simply rest.",
+        "I'm here if you'd like to talk… there's no hurry at all.",
+        "How is your body feeling right now… heavy, or still a little tense?",
     ]
 
     static let relaxation = [

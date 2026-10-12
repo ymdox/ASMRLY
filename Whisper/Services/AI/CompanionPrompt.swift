@@ -28,6 +28,9 @@ enum CompanionPrompt {
 
     private static func guidance(for context: ConversationContext) -> String {
         switch context.stage {
+        case .conversation where context.isMonologue && context.invitesReply:
+            return "The listener has been quiet for a while. Offer one calming thought, and you may softly invite them "
+                + "to share what's on their mind if they'd like, with no pressure at all."
         case .conversation where context.isMonologue:
             return "The listener chose to just listen. Offer one calming thought or soft, sensory imagery. Do not ask questions."
         case .conversation:

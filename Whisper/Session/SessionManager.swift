@@ -8,6 +8,7 @@ import Observation
 final class SessionManager: Identifiable {
     static let voiceUnavailableMessage = "Voice isn't available right now. Your soundscape can keep playing."
     static let listeningUnavailableMessage = "Listening isn't available right now. Your soundscape can keep playing."
+    static let didNotHearMessage = "I didn't quite catch that… hold the mic while you speak, then let go."
     private static let maxHistory = 10
     private static let closingStyle = VoiceStyle(volume: 0.45, pace: 0.85)
 
@@ -48,6 +49,8 @@ final class SessionManager: Identifiable {
     @ObservationIgnored private var hasStarted = false
     @ObservationIgnored private var finalFadeStarted = false
     @ObservationIgnored private var consecutiveFailures = 0
+    /// When Luna last finished speaking or the user last used the microphone.
+    @ObservationIgnored private var lastInteractionAt = Date.now
 
     init(
         companion: Companion,
@@ -89,6 +92,16 @@ final class SessionManager: Identifiable {
 
     var isPaused: Bool { phase == .paused }
 
+    /// Short guidance under the controls so it's clear how to talk to the companion.
+    var talkHint: String? {
+        guard canTalk, mode == .talk, phase.allowsVoice, !isEnding else { return nil }
+        switch activity {
+        case .listening: return "I'm listening… release or tap the mic when you're done."
+        case .idle: return "Hold the mic, or tap it, to talk to \(companion.name)."
+        case .thinking, .whispering: return nil
+        }
+    }
+
     var isMicrophoneEnabled: Bool {
         canTalk && mode == .talk && phase.allowsVoice && !isEnding
     }
@@ -125,7 +138,13 @@ final class SessionManager: Identifiable {
 
     /// Silence between the companion's unprompted whispers; grows during relaxation.
     private var monologuePause: TimeInterval {
-        let base: TimeInterval = timelinePhase == .relaxation ? 12 + 18 * stageProgress : 7
+        let base: TimeInterval
+        switch (timelinePhase, mode) {
+        case (.relaxation, _): base = 12 + 18 * stageProgress
+        // In Talk mode Luna leaves room to answer, but never lets the session go silent.
+        case (_, .talk): base = 20
+        case (_, .justListen): base = 6
+        }
         // Back off gently if the voice keeps failing (e.g. offline).
         return base + Double(min(consecutiveFailures, 4)) * 15
     }
@@ -260,6 +279,7 @@ final class SessionManager: Identifiable {
             }
             liveUserText = ""
             activity = .listening
+            lastInteractionAt = .now
         } catch {
             activity = .idle
             showNotice(Self.listeningUnavailableMessage)
@@ -274,8 +294,10 @@ final class SessionManager: Identifiable {
             let text = await self.speech.stopListening().trimmingCharacters(in: .whitespacesAndNewlines)
             self.liveUserText = nil
             guard !Task.isCancelled else { return }
+            self.lastInteractionAt = .now
             guard !text.isEmpty else {
                 self.activity = .idle
+                self.showNotice(Self.didNotHearMessage)
                 return
             }
             guard self.safety.assess(text) == .ok else {
@@ -387,8 +409,7 @@ final class SessionManager: Identifiable {
     // MARK: - Companion turns
 
     private func updateMonologue() {
-        let shouldRun = !isEnding
-            && ((phase == .conversation && mode == .justListen) || phase == .relaxation)
+        let shouldRun = !isEnding && phase.allowsVoice
         if shouldRun {
             guard monologueTask == nil else { return }
             monologueTask = Task { [weak self] in
@@ -402,14 +423,16 @@ final class SessionManager: Identifiable {
 
     private func runMonologue() async {
         while !Task.isCancelled {
-            try? await Task.sleep(for: .seconds(monologuePause))
+            try? await Task.sleep(for: .seconds(1))
             guard !Task.isCancelled else { return }
-            guard activity == .idle, phase.allowsVoice else { continue }
+            guard activity == .idle, phase.allowsVoice,
+                  Date.now.timeIntervalSince(lastInteractionAt) >= monologuePause else { continue }
             let turn = Task<Void, Never> { [weak self] in
                 await self?.runTurn(userText: nil)
             }
             turnTask = turn
             await turn.value
+            lastInteractionAt = .now
         }
     }
 
@@ -419,7 +442,8 @@ final class SessionManager: Identifiable {
             companionName: companion.name,
             stage: timelinePhase == .relaxation ? .relaxation : .conversation,
             stageProgress: stageProgress,
-            isMonologue: userText == nil
+            isMonologue: userText == nil,
+            invitesReply: userText == nil && mode == .talk && canTalk
         )
 
         do {
@@ -456,6 +480,7 @@ final class SessionManager: Identifiable {
                 showNotice(Self.voiceUnavailableMessage)
             }
         }
+        lastInteractionAt = .now
         guard !Task.isCancelled else { return }
         activity = .idle
     }

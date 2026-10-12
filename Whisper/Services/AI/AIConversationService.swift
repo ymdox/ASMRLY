@@ -23,6 +23,8 @@ struct ConversationContext: Sendable {
     let stageProgress: Double
     /// True when the companion continues on its own (Just Listen / relaxation).
     let isMonologue: Bool
+    /// Talk mode and the user has been quiet: the companion may softly invite them to share.
+    var invitesReply: Bool = false
 }
 
 protocol AIConversationService: Sendable {

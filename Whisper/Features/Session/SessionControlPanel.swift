@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 /// Mode toggle, ambience volume and the Pause / Microphone / End row.
 struct SessionControlPanel: View {
@@ -12,10 +13,14 @@ struct SessionControlPanel: View {
             }
 
             if !session.canTalk {
-                Text("Microphone is off, so Luna will keep you company in Just Listen mode.")
+                MicrophoneOffNotice(companionName: session.companion.name)
+            } else if let hint = session.talkHint {
+                Text(hint)
                     .font(Theme.Typography.caption)
-                    .foregroundStyle(Theme.Colors.textTertiary)
+                    .foregroundStyle(Theme.Colors.textSecondary)
                     .multilineTextAlignment(.center)
+                    .contentTransition(.opacity)
+                    .animation(.easeInOut(duration: 0.3), value: hint)
             }
 
             if session.ambience != .none {
@@ -47,6 +52,29 @@ struct SessionControlPanel: View {
 
                 RoundIconButton(systemName: "xmark", title: "End", action: onEnd)
                     .accessibilityLabel("End session")
+            }
+        }
+    }
+}
+
+/// Explains why Talk is off and links to Settings to turn the microphone on.
+private struct MicrophoneOffNotice: View {
+    let companionName: String
+    @Environment(\.openURL) private var openURL
+
+    var body: some View {
+        VStack(spacing: Theme.Spacing.xxs) {
+            Text("Microphone or speech recognition is off, so \(companionName) keeps you company in Just Listen mode.")
+                .font(Theme.Typography.caption)
+                .foregroundStyle(Theme.Colors.textTertiary)
+                .multilineTextAlignment(.center)
+            if let settings = URL(string: UIApplication.openSettingsURLString) {
+                Button("Turn on in Settings, then start a new session") {
+                    openURL(settings)
+                }
+                .font(Theme.Typography.caption.weight(.semibold))
+                .foregroundStyle(Theme.Colors.lavender)
+                .frame(minHeight: Theme.Layout.minTapTarget)
             }
         }
     }
