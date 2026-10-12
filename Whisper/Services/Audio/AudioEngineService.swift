@@ -21,7 +21,7 @@ enum AudioEngineError: Error {
 /// Every level change is ramped; nothing is ever cut abruptly.
 @MainActor
 final class AudioEngineService {
-    var onEvent: ((AudioEvent) -> Void)?
+    var onEvent: (@MainActor (AudioEvent) -> Void)?
 
     /// User-facing ambience level (0…1), set from the session slider.
     private(set) var ambienceLevel: Float = 0.5
