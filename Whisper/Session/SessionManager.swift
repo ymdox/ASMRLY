@@ -405,7 +405,7 @@ final class SessionManager: Identifiable {
             try? await Task.sleep(for: .seconds(monologuePause))
             guard !Task.isCancelled else { return }
             guard activity == .idle, phase.allowsVoice else { continue }
-            let turn = Task { [weak self] in
+            let turn = Task<Void, Never> { [weak self] in
                 await self?.runTurn(userText: nil)
             }
             turnTask = turn
