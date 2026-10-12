@@ -1,4 +1,5 @@
 import Foundation
+import OSLog
 
 enum AIServiceError: Error {
     case invalidRequest
@@ -14,6 +15,7 @@ struct OpenAIConversationService: AIConversationService {
 
     private static let endpoint = "https://api.openai.com/v1/chat/completions"
     private static let historyLimit = 8
+    private static let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "Whisper", category: "OpenAI")
 
     func reply(to userText: String?, history: [ChatMessage], context: ConversationContext) async throws -> String {
         guard let url = URL(string: Self.endpoint) else { throw AIServiceError.invalidRequest }
@@ -37,13 +39,28 @@ struct OpenAIConversationService: AIConversationService {
         encoder.keyEncodingStrategy = .convertToSnakeCase
         request.httpBody = try encoder.encode(body)
 
-        let (data, response) = try await session.data(for: request)
+        let result: (Data, URLResponse)
+        do {
+            result = try await session.data(for: request)
+        } catch {
+            Self.logger.error("Request failed: \(error.localizedDescription, privacy: .public)")
+            throw error
+        }
+        let (data, response) = result
         guard let http = response as? HTTPURLResponse else { throw AIServiceError.badResponse(statusCode: -1) }
-        guard (200..<300).contains(http.statusCode) else { throw AIServiceError.badResponse(statusCode: http.statusCode) }
+        guard (200..<300).contains(http.statusCode) else {
+            // OpenAI explains failures (invalid key, no credits / insufficient_quota, unknown model) in the body.
+            let detail = String(decoding: data.prefix(500), as: UTF8.self)
+            Self.logger.error("HTTP \(http.statusCode, privacy: .public) for model \(model, privacy: .public): \(detail, privacy: .public)")
+            throw AIServiceError.badResponse(statusCode: http.statusCode)
+        }
 
         let decoded = try JSONDecoder().decode(ChatCompletionResponse.self, from: data)
         guard let content = decoded.choices.first?.message.content,
-              let text = CompanionPrompt.sanitize(content) else { throw AIServiceError.emptyResponse }
+              let text = CompanionPrompt.sanitize(content) else {
+            Self.logger.error("Empty reply from \(model, privacy: .public).")
+            throw AIServiceError.emptyResponse
+        }
         return text
     }
 
