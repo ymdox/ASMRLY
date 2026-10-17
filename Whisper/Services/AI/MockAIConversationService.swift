@@ -1,11 +1,23 @@
 import Foundation
 
-/// Offline companion with pre-written calm lines. Used whenever no OpenAI key is configured.
+/// Offline companion with pre-written calm lines. Used only when no OpenAI key is configured;
+/// with a key, every line comes from OpenAI and nothing pre-written is ever spoken.
 struct MockAIConversationService: AIConversationService {
     var delay: ClosedRange<Double> = 0.8...1.6
 
     func reply(to userText: String?, history: [ChatMessage], context: ConversationContext) async throws -> String {
         try await Task.sleep(for: .seconds(Double.random(in: delay)))
+
+        switch context.moment {
+        case .opening:
+            return context.invitesReply
+                ? "Hi… I'm \(context.companionName). I'm right here with you. How are you feeling tonight?"
+                : "Hi… I'm \(context.companionName). Just get comfortable… I'll keep you company tonight."
+        case .closing:
+            return "I'll let the sounds carry you now… rest easy… goodnight."
+        case .turn:
+            break
+        }
 
         let pool: [String]
         switch (context.stage, userText) {

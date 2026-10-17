@@ -27,6 +27,19 @@ enum CompanionPrompt {
     static let continuePrompt = "(The listener is quietly listening. Continue softly, without asking anything.)"
 
     private static func guidance(for context: ConversationContext) -> String {
+        switch context.moment {
+        case .opening where context.invitesReply:
+            return "The session is just starting. Greet the listener warmly, introduce yourself as \(context.companionName), "
+                + "and softly ask how they are feeling tonight."
+        case .opening:
+            return "The session is just starting and the listener chose to just listen. Greet them warmly, introduce "
+                + "yourself as \(context.companionName), and invite them to get comfortable. Do not ask questions."
+        case .closing:
+            return "The session is ending; only the soft ambient sound will continue. Whisper a very short, gentle goodnight. "
+                + "No questions."
+        case .turn:
+            break
+        }
         switch context.stage {
         case .conversation where context.isMonologue && context.invitesReply:
             return "The listener has been quiet for a while. Offer one calming thought, and you may softly invite them "

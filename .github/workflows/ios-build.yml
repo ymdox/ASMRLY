@@ -100,6 +100,28 @@ jobs:
           done
           echo "✅ App stayed alive through a full 1-minute session."
 
+      - name: Conversation reaches the AI (fake OpenAI server)
+        run: |
+          python3 .github/scripts/fake_openai.py 8099 requests.jsonl &
+          sleep 1
+          xcrun simctl terminate "$UDID" "$BUNDLE_ID" || true
+          sleep 2
+          xcrun simctl launch "$UDID" "$BUNDLE_ID" \
+            -WhisperSessionMinutes 3 -WhisperAutoStartAmbience rain \
+            -WhisperOpenAIBaseURL http://127.0.0.1:8099 -WhisperOpenAIKeyOverride test-key \
+            -WhisperAutoSay "My cat is called Pixel"
+          sleep 40
+          xcrun simctl io "$UDID" screenshot screenshots/7-ai-conversation.png >/dev/null 2>&1 || true
+          echo "---- Requests the app sent ----"
+          cat requests.jsonl || true
+          COUNT=$(wc -l < requests.jsonl 2>/dev/null || echo 0)
+          echo "Requests received: $COUNT"
+          if ! grep -q "Pixel" requests.jsonl 2>/dev/null; then
+            echo "❌ The app never sent the listener's words to the AI."
+            exit 1
+          fi
+          echo "✅ The app sent the listener's words to the AI and received a reply."
+
       - name: App log
         if: always()
         run: |

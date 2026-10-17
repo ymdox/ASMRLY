@@ -23,7 +23,7 @@ enum ConnectionDiagnostics {
         guard let key = configuration.openAIKey else {
             return ProviderCheck(name: name, isWorking: false, detail: "No OPENAI_API_KEY found, so Luna uses pre-written lines.")
         }
-        guard let url = URL(string: "https://api.openai.com/v1/chat/completions") else {
+        guard let url = URL(string: configuration.openAIBaseURL + "/v1/chat/completions") else {
             return ProviderCheck(name: name, isWorking: false, detail: "Invalid URL.")
         }
         var request = URLRequest(url: url, timeoutInterval: 15)

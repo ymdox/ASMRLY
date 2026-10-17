@@ -19,14 +19,14 @@ enum AIServiceError: Error, CustomStringConvertible {
 struct OpenAIConversationService: AIConversationService {
     let apiKey: String
     let model: String
+    var baseURL: String = APIConfiguration.defaultOpenAIBaseURL
     var session: URLSession = .shared
 
-    private static let endpoint = "https://api.openai.com/v1/chat/completions"
     private static let historyLimit = 8
     private static let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "Whisper", category: "OpenAI")
 
     func reply(to userText: String?, history: [ChatMessage], context: ConversationContext) async throws -> String {
-        guard let url = URL(string: Self.endpoint) else { throw AIServiceError.invalidRequest }
+        guard let url = URL(string: baseURL + "/v1/chat/completions") else { throw AIServiceError.invalidRequest }
 
         var messages = [ChatMessage(role: .system, content: CompanionPrompt.system(for: context))]
         messages += history.suffix(Self.historyLimit)
@@ -47,6 +47,7 @@ struct OpenAIConversationService: AIConversationService {
         encoder.keyEncodingStrategy = .convertToSnakeCase
         request.httpBody = try encoder.encode(body)
 
+        Self.logger.info("Sending request to \(url.absoluteString, privacy: .public) (model \(model, privacy: .public)).")
         let result: (Data, URLResponse)
         do {
             result = try await session.data(for: request)
@@ -59,11 +60,13 @@ struct OpenAIConversationService: AIConversationService {
         guard (200..<300).contains(http.statusCode) else {
             // OpenAI explains failures (invalid key, no credits / insufficient_quota, unknown model) in the body.
             let detail = String(decoding: data.prefix(500), as: UTF8.self)
+            // (Logged in full; the thrown error carries OpenAI's own message for the UI.)
             Self.logger.error("HTTP \(http.statusCode, privacy: .public) for model \(model, privacy: .public): \(detail, privacy: .public)")
             throw AIServiceError.badResponse(statusCode: http.statusCode, message: ConnectionDiagnostics.errorMessage(from: data))
         }
 
         let decoded = try JSONDecoder().decode(ChatCompletionResponse.self, from: data)
+        Self.logger.info("Reply received from \(model, privacy: .public).")
         guard let content = decoded.choices.first?.message.content,
               let text = CompanionPrompt.sanitize(content) else {
             Self.logger.error("Empty reply from \(model, privacy: .public).")

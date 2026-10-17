@@ -9,22 +9,37 @@ import Foundation
 /// through a backend you control. Embedding them here is acceptable only for this MVP.
 struct APIConfiguration: Sendable {
     static let defaultOpenAIModel = "gpt-4o-mini"
+    static let defaultOpenAIBaseURL = "https://api.openai.com"
 
-    let openAIKey: String?
+    var openAIKey: String?
     let openAIModel: String
+    /// Scheme + host of the OpenAI-compatible API. Only overridden by automated tests.
+    var openAIBaseURL: String = APIConfiguration.defaultOpenAIBaseURL
     let elevenLabsKey: String?
     let elevenLabsVoiceID: String?
     /// Optional; defaults to `ElevenLabsVoiceService.defaultModelID`.
     let elevenLabsModelID: String?
 
     static func load(from bundle: Bundle = .main) -> APIConfiguration {
-        APIConfiguration(
+        var configuration = APIConfiguration(
             openAIKey: value(for: "OPENAI_API_KEY", in: bundle),
             openAIModel: value(for: "OPENAI_MODEL", in: bundle) ?? defaultOpenAIModel,
             elevenLabsKey: value(for: "ELEVENLABS_API_KEY", in: bundle),
             elevenLabsVoiceID: value(for: "ELEVENLABS_VOICE_ID", in: bundle),
             elevenLabsModelID: value(for: "ELEVENLABS_MODEL_ID", in: bundle)
         )
+        #if DEBUG
+        // Automated simulator tests point the app at a local fake OpenAI server:
+        // -WhisperOpenAIBaseURL http://127.0.0.1:8099 -WhisperOpenAIKeyOverride test
+        let defaults = UserDefaults.standard
+        if let baseURL = defaults.string(forKey: "WhisperOpenAIBaseURL"), !baseURL.isEmpty {
+            configuration.openAIBaseURL = baseURL
+        }
+        if let key = defaults.string(forKey: "WhisperOpenAIKeyOverride"), !key.isEmpty {
+            configuration.openAIKey = key
+        }
+        #endif
+        return configuration
     }
 
     private static func value(for key: String, in bundle: Bundle) -> String? {

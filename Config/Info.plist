@@ -42,6 +42,12 @@
 	</array>
 	<key>UIUserInterfaceStyle</key>
 	<string>Dark</string>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<!-- Only lets automated tests reach a fake OpenAI server on the local machine. -->
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+	</dict>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Whisper uses your microphone only during an active session, when you choose to speak to your companion.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
