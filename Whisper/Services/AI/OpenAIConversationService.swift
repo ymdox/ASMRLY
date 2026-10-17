@@ -47,15 +47,7 @@ struct OpenAIConversationService: AIConversationService {
         encoder.keyEncodingStrategy = .convertToSnakeCase
         request.httpBody = try encoder.encode(body)
 
-        Self.logger.info("Sending request to \(url.absoluteString, privacy: .public) (model \(model, privacy: .public)).")
-        let result: (Data, URLResponse)
-        do {
-            result = try await session.data(for: request)
-        } catch {
-            Self.logger.error("Request failed: \(error.localizedDescription, privacy: .public)")
-            throw error
-        }
-        let (data, response) = result
+        let (data, response) = try await send(request)
         guard let http = response as? HTTPURLResponse else { throw AIServiceError.badResponse(statusCode: -1, message: "No HTTP response") }
         guard (200..<300).contains(http.statusCode) else {
             // OpenAI explains failures (invalid key, no credits / insufficient_quota, unknown model) in the body.
@@ -73,6 +65,31 @@ struct OpenAIConversationService: AIConversationService {
             throw AIServiceError.emptyResponse
         }
         return text
+    }
+
+    /// Sends the request, retrying once after a short pause if the network hiccups
+    /// (timeout, dropped connection) so a flaky connection doesn't cost Luna a line.
+    private func send(_ request: URLRequest) async throws -> (Data, URLResponse) {
+        let url = request.url?.absoluteString ?? "?"
+        var attempt = 1
+        while true {
+            Self.logger.info("Sending request to \(url, privacy: .public) (model \(model, privacy: .public), attempt \(attempt, privacy: .public)).")
+            do {
+                return try await session.data(for: request)
+            } catch let error as URLError where attempt == 1 && Self.isTransient(error) {
+                Self.logger.error("Request failed (\(error.localizedDescription, privacy: .public)); retrying once.")
+                attempt += 1
+                try await Task.sleep(for: .milliseconds(600))
+            } catch {
+                Self.logger.error("Request failed: \(error.localizedDescription, privacy: .public)")
+                throw error
+            }
+        }
+    }
+
+    private static func isTransient(_ error: URLError) -> Bool {
+        [.timedOut, .networkConnectionLost, .cannotConnectToHost, .dnsLookupFailed, .notConnectedToInternet]
+            .contains(error.code)
     }
 
     /// Reasoning models only accept the default temperature.

@@ -6,7 +6,7 @@ listener's last message, so screenshots prove the app's words came from this "AI
 import json
 import sys
 import time
-from http.server import BaseHTTPRequestHandler, HTTPServer
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 LOG = sys.argv[2] if len(sys.argv) > 2 else "requests.jsonl"
 
@@ -41,4 +41,4 @@ class Handler(BaseHTTPRequestHandler):
         pass
 
 
-HTTPServer(("127.0.0.1", int(sys.argv[1])), Handler).serve_forever()
+ThreadingHTTPServer(("127.0.0.1", int(sys.argv[1])), Handler).serve_forever()

@@ -122,11 +122,15 @@ jobs:
           python3 -c "import json,sys; [print(r['time'], r['body']['messages'][-1]['content'][:80]) for r in map(json.loads, open('requests.jsonl'))]" || true
           COUNT=$(wc -l < requests.jsonl 2>/dev/null || echo 0)
           echo "Requests received: $COUNT"
+          if ! grep -q "just starting" requests.jsonl 2>/dev/null; then
+            echo "❌ Luna's greeting never reached the AI."
+            exit 1
+          fi
           if ! grep -q "Pixel" requests.jsonl 2>/dev/null; then
             echo "❌ The app never sent the listener's words to the AI."
             exit 1
           fi
-          echo "✅ The app sent the listener's words to the AI and received a reply."
+          echo "✅ The greeting and the listener's words reached the AI and replies came back."
 
       - name: App log
         if: always()
