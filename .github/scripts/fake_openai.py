@@ -5,6 +5,7 @@ listener's last message, so screenshots prove the app's words came from this "AI
 """
 import json
 import sys
+import time
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
 LOG = sys.argv[2] if len(sys.argv) > 2 else "requests.jsonl"
@@ -18,7 +19,7 @@ class Handler(BaseHTTPRequestHandler):
             body = json.loads(raw)
         except ValueError:
             body = {"unparsed": raw.decode(errors="replace")}
-        record = {"path": self.path, "authorization": self.headers.get("Authorization", ""), "body": body}
+        record = {"time": time.strftime("%H:%M:%S"), "path": self.path, "authorization": self.headers.get("Authorization", ""), "body": body}
         with open(LOG, "a") as log:
             log.write(json.dumps(record) + "\n")
 
