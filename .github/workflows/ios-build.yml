@@ -1,0 +1,158 @@
+name: iOS build
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ios-build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build for iOS Simulator
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Show Xcode version
+        run: xcodebuild -version
+
+      # No Secrets.xcconfig in CI: the app builds in its zero-key mode (mock companion + Apple voice).
+      - name: Build
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -project Whisper.xcodeproj \
+            -scheme Whisper \
+            -configuration Debug \
+            -destination 'generic/platform=iOS Simulator' \
+            CODE_SIGNING_ALLOWED=NO \
+            build 2>&1 | tee build.log
+
+      - name: Show compiler errors
+        if: failure()
+        run: |
+          grep -E "error:|warning: .*(will be an error|unavailable)" build.log | sort -u | head -100 || true
+
+  smoke-test:
+    name: Simulator smoke test
+    needs: build
+    runs-on: macos-15
+    timeout-minutes: 30
+    env:
+      BUNDLE_ID: com.example.whisper
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Boot an iPhone simulator
+        run: |
+          UDID=$(xcrun simctl list devices available -j | python3 -c '
+          import json, sys
+          devices = json.load(sys.stdin)["devices"]
+          ios = sorted((rt for rt in devices if "iOS" in rt), reverse=True)
+          for rt in ios:
+              phones = [d for d in devices[rt] if d["name"].startswith("iPhone")]
+              if phones:
+                  print(phones[0]["udid"]); break
+          ')
+          echo "Using simulator $UDID"
+          echo "UDID=$UDID" >> "$GITHUB_ENV"
+          xcrun simctl boot "$UDID"
+          xcrun simctl bootstatus "$UDID" -b
+
+      - name: Build for the simulator
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -project Whisper.xcodeproj -scheme Whisper -configuration Debug \
+            -destination "id=$UDID" -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO build | tail -5
+
+      - name: Install and run
+        run: |
+          mkdir -p screenshots
+          APP=build/Build/Products/Debug-iphonesimulator/Whisper.app
+          xcrun simctl install "$UDID" "$APP"
+
+          alive() { xcrun simctl spawn "$UDID" launchctl list | grep -q "UIKitApplication:$BUNDLE_ID"; }
+          shot() { xcrun simctl io "$UDID" screenshot "screenshots/$1.png" >/dev/null 2>&1; echo "📸 $1 (t=${2}s)"; }
+
+          # 1) Home screen.
+          xcrun simctl launch "$UDID" "$BUNDLE_ID"
+          sleep 6; shot 1-home 6
+          xcrun simctl terminate "$UDID" "$BUNDLE_ID" || true
+          sleep 2
+
+          # 2) A 1-minute session in Just Listen mode (15 s talk / 30 s relax / 15 s ambience).
+          xcrun simctl launch --console-pty "$UDID" "$BUNDLE_ID" \
+            -WhisperSessionMinutes 1 -WhisperAutoStartAmbience rain > app-console.log 2>&1 &
+          for t in 10 25 45 70 85; do
+            sleep $(( t - ${prev:-0} )); prev=$t
+            if ! alive; then echo "❌ App is not running at t=${t}s (crashed?)"; exit 1; fi
+            case $t in
+              10) shot 2-conversation $t ;; 25) shot 3-relaxation $t ;; 45) shot 4-relaxation-late $t ;;
+              70) shot 5-session-end $t ;; 85) shot 6-after-end $t ;;
+            esac
+          done
+          echo "✅ App stayed alive through a full 1-minute session."
+
+      - name: Conversation reaches the AI (fake OpenAI server)
+        run: |
+          python3 .github/scripts/fake_openai.py 8099 requests.jsonl &
+          sleep 1
+          xcrun simctl terminate "$UDID" "$BUNDLE_ID" || true
+          sleep 2
+          xcrun simctl spawn "$UDID" log stream --level debug --style compact \
+            --predicate 'subsystem == "com.example.whisper"' > whisper-log.txt 2>&1 &
+          sleep 2
+          echo "Launch at $(date +%H:%M:%S)"
+          xcrun simctl launch "$UDID" "$BUNDLE_ID" \
+            -WhisperSessionMinutes 3 -WhisperAutoStartAmbience rain \
+            -WhisperOpenAIBaseURL http://127.0.0.1:8099 -WhisperOpenAIKeyOverride test-key \
+            -WhisperAutoSay "My cat is called Pixel"
+          sleep 40
+          xcrun simctl io "$UDID" screenshot screenshots/7-ai-conversation.png >/dev/null 2>&1 || true
+          echo "---- App log (Whisper) ----"
+          cat whisper-log.txt || true
+          echo "---- Requests the app sent ----"
+          python3 -c "import json,sys; [print(r['time'], r['body']['messages'][-1]['content'][:80]) for r in map(json.loads, open('requests.jsonl'))]" || true
+          COUNT=$(wc -l < requests.jsonl 2>/dev/null || echo 0)
+          echo "Requests received: $COUNT"
+          if ! grep -q "just starting" requests.jsonl 2>/dev/null; then
+            echo "❌ Luna's greeting never reached the AI."
+            exit 1
+          fi
+          if ! grep -q "Pixel" requests.jsonl 2>/dev/null; then
+            echo "❌ The app never sent the listener's words to the AI."
+            exit 1
+          fi
+          echo "✅ The greeting and the listener's words reached the AI and replies came back."
+
+      - name: App log
+        if: always()
+        run: |
+          xcrun simctl spawn "$UDID" log show --last 5m --style compact \
+            --predicate 'process == "Whisper"' 2>/dev/null | grep -viE "^\s*$" | tail -150 || true
+          echo "---- console ----"; tail -50 app-console.log 2>/dev/null || true
+          ls ~/Library/Logs/DiagnosticReports 2>/dev/null | grep -i whisper && echo "⚠️ crash report found" || echo "No crash reports."
+
+      - name: Print small screenshots for review
+        if: always()
+        run: |
+          for f in screenshots/*.png; do
+            [ -f "$f" ] || continue
+            sips -s format jpeg -s formatOptions 45 -Z 520 "$f" --out "${f%.png}.jpg" >/dev/null
+            echo "=====BEGIN $(basename "${f%.png}")====="
+            base64 -i "${f%.png}.jpg" | fold -w 120
+            echo "=====END====="
+          done
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: simulator-screenshots
+          path: screenshots/*.png

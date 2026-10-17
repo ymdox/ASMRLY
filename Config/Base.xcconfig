@@ -1,0 +1,6 @@
+// Base build settings shared by Debug and Release.
+// Secrets.xcconfig is optional and git-ignored. Copy Secrets.example.xcconfig
+// to Secrets.xcconfig and fill in your keys to enable real AI + voice.
+#include? "Secrets.xcconfig"
+
+PRODUCT_BUNDLE_IDENTIFIER = com.example.whisper
